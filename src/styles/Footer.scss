@@ -1,0 +1,25 @@
+.footer {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+  text-align: center;
+  
+  &__text {
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 8px;
+  }
+  
+  &__copyright {
+    font-size: 0.8rem;
+    color: #999;
+  }
+}
+
+/* Медиа-запрос для адаптивности */
+@media (max-width: 768px) {
+  .footer {
+    margin-top: 32px;
+    padding: 16px;
+  }
+} 
