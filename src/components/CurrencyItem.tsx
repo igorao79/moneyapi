@@ -1,4 +1,4 @@
-import React, { useState, ReactElement, useContext, useMemo, memo, useRef, useLayoutEffect } from 'react';
+import React, { useState, ReactElement, useContext, memo, useRef, useLayoutEffect } from 'react';
 import { FiArrowUp, FiArrowDown } from 'react-icons/fi';
 import { 
   FaRubleSign, 
@@ -35,9 +35,6 @@ const supportsWebP = (() => {
     return false;
   }
 })();
-
-// Global cache for flag URLs to prevent re-renders during search
-const flagUrlCache: Record<string, string> = {};
 
 // Соответствие кодов валют кодам стран для получения фона
 const COUNTRY_CODES: Record<string, string> = {
@@ -104,25 +101,6 @@ const CURRENCY_SYMBOLS: Record<string, ReactElement> = {
   DKK: <FaCoins />,             // Датская крона
   CZK: <FaCoins />,             // Чешская крона
   ISK: <FaCoins />,             // Исландская крона
-};
-
-// Function to get flag URL with caching
-const getGlobalFlagUrl = (code: string, countryCode?: string): string => {
-  const cacheKey = code;
-  
-  if (flagUrlCache[cacheKey]) {
-    return flagUrlCache[cacheKey];
-  }
-  
-  const resolvedCountryCode = countryCode?.toLowerCase() || COUNTRY_CODES[code]?.toLowerCase() || '';
-  if (!resolvedCountryCode) return '';
-  
-  // Use WebP if supported, otherwise PNG, with higher resolution
-  const url = `https://flagcdn.com/w80/${resolvedCountryCode}.${supportsWebP ? 'webp' : 'png'}`;
-  
-  // Cache the result
-  flagUrlCache[cacheKey] = url;
-  return url;
 };
 
 // Enhanced global flag preloader that guarantees no re-renders

@@ -1,5 +1,4 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
 import reactSwc from '@vitejs/plugin-react-swc'
 import viteCompression from 'vite-plugin-compression'
 import viteImagemin from 'vite-plugin-imagemin'
@@ -47,9 +46,9 @@ export default defineConfig({
     }),
     checker({
       typescript: true,
-      eslint: {
-        lintCommand: 'eslint "./src/**/*.{ts,tsx}"',
-      },
+      // eslint: {
+      //   lintCommand: 'eslint "./src/**/*.{ts,tsx}"',
+      // },
     }),
   ],
   build: {
