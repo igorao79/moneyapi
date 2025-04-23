@@ -21,21 +21,17 @@ const imageCache: ImageCache = {};
 // Флаги поддержки форматов изображений в браузере (ленивая инициализация)
 let formatSupport: { webp: boolean } | null = null;
 
+// Словарь уже загруженных URL флагов по коду страны
+const FLAG_URL_CACHE: Record<string, string> = {};
+
 /**
  * Проверяет поддержку форматов изображений браузером
  */
 export const checkImageFormatsSupport = (): { webp: boolean } => {
   if (formatSupport) return formatSupport;
 
-  let webpSupport = false;
-
-  // Определяем поддержку WebP
-  const webpCanvas = document.createElement('canvas');
-  if (webpCanvas.toDataURL('image/webp').indexOf('data:image/webp') === 0) {
-    webpSupport = true;
-  }
-
-  formatSupport = { webp: webpSupport };
+  // Всегда предпочитаем WebP, если не отладка
+  formatSupport = { webp: true };
   return formatSupport;
 };
 
@@ -105,19 +101,33 @@ export const getOptimizedImageUrl = async (url: string): Promise<string> => {
  * @returns Объект с URL разных форматов изображения
  */
 export const getOptimalImageUrls = (baseUrl: string, countryCode: string) => {
+  // Проверяем, есть ли уже кэшированный URL для этого кода страны
+  if (FLAG_URL_CACHE[countryCode]) {
+    return {
+      optimal: FLAG_URL_CACHE[countryCode],
+      png: `${baseUrl}/${countryCode}.png`,
+      webp: `${baseUrl}/${countryCode}.webp`
+    };
+  }
+  
+  // Определяем оптимальный формат с учетом поддержки браузера
   const { webp } = checkImageFormatsSupport();
   
+  // Формируем URL для разных форматов
   const urls = {
-    optimal: `${baseUrl}/${countryCode}.png`, // По умолчанию PNG
     png: `${baseUrl}/${countryCode}.png`,
-    webp: `${baseUrl}/${countryCode}.webp`
+    webp: `${baseUrl}/${countryCode}.webp`,
+    optimal: `${baseUrl}/${countryCode}.png` // По умолчанию PNG
   };
-
-  // Определяем оптимальный формат с учетом поддержки браузера
+  
+  // Выбираем WebP, если поддерживается браузером
   if (webp) {
     urls.optimal = urls.webp;
   }
-
+  
+  // Кэшируем выбранный URL
+  FLAG_URL_CACHE[countryCode] = urls.optimal;
+  
   return urls;
 };
 

@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useMemo, memo } from 'react';
 import { Currency } from '../types';
 import CurrencyItem from './CurrencyItem';
 import '../styles/CurrencyList.scss';
@@ -9,8 +9,33 @@ interface CurrencyListProps {
   loading: boolean;
 }
 
-const CurrencyList: React.FC<CurrencyListProps> = ({ currencies, loading }) => {
+// Create a memoized list item to prevent re-renders when parent re-renders
+const MemoizedCurrencyItem = memo(
+  ({ currency, deleteCurrency }: { currency: Currency; deleteCurrency: (code: string) => void }) => (
+    <CurrencyItem 
+      key={currency.code} 
+      currency={currency} 
+      deleteCurrency={deleteCurrency}
+    />
+  ),
+  (prevProps, nextProps) => {
+    // Only re-render if the currency data changes
+    return prevProps.currency.code === nextProps.currency.code &&
+           prevProps.currency.value === nextProps.currency.value &&
+           prevProps.currency.change === nextProps.currency.change &&
+           prevProps.currency.changePercent === nextProps.currency.changePercent;
+  }
+);
+
+// Memoize the entire CurrencyList component
+const CurrencyList: React.FC<CurrencyListProps> = memo(({ currencies, loading }) => {
   const actionsContext = useContext(CurrencyActionsContext);
+  
+  // Memoize the delete handler so it doesn't change on re-renders
+  const deleteCurrency = useMemo(() => 
+    actionsContext?.deleteCurrency || (() => {}),
+    [actionsContext]
+  );
   
   if (loading && currencies.length === 0) {
     return (
@@ -32,14 +57,14 @@ const CurrencyList: React.FC<CurrencyListProps> = ({ currencies, loading }) => {
   return (
     <div className="currency-list">
       {currencies.map((currency) => (
-        <CurrencyItem 
+        <MemoizedCurrencyItem 
           key={currency.code} 
           currency={currency} 
-          deleteCurrency={actionsContext?.deleteCurrency}
+          deleteCurrency={deleteCurrency}
         />
       ))}
     </div>
   );
-};
+});
 
 export default CurrencyList; 

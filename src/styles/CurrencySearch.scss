@@ -64,6 +64,18 @@
     &:not(:last-child) {
       border-bottom: 1px solid #f0f0f0;
     }
+    
+    &--loading {
+      background-color: #e3f2fd;
+      pointer-events: none; /* Предотвращает повторные клики */
+    }
+  }
+  
+  &__item-loading {
+    color: #2196f3;
+    font-size: 0.9rem;
+    font-style: italic;
+    animation: pulse 1.5s infinite;
   }
   
   &__item-info {
@@ -110,6 +122,25 @@
     &:hover {
       transform: scale(1.2);
     }
+  }
+}
+
+.currency-search__no-results {
+  padding: 15px;
+  text-align: center;
+  color: #777;
+  font-style: italic;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
   }
 }
 

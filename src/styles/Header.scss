@@ -11,6 +11,14 @@
     margin-bottom: 16px;
   }
   
+  &__content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  
   &__currency-symbol {
     font-size: 2rem;
     font-weight: 700;
@@ -59,6 +67,30 @@
     margin-right: 8px;
     font-size: 1.2rem;
   }
+  
+  &__refresh-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #2196f3, #03a9f4);
+    color: white;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
+    transition: all 0.3s ease;
+    
+    &:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 12px rgba(33, 150, 243, 0.4);
+    }
+    
+    &:active {
+      transform: scale(0.95);
+    }
+  }
 }
 
 @keyframes pulse-soft {
@@ -98,6 +130,11 @@
     
     &__icon {
       font-size: 1rem;
+    }
+    
+    &__refresh-btn {
+      width: 36px;
+      height: 36px;
     }
   }
 } 

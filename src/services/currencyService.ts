@@ -11,6 +11,14 @@ interface ApiCurrencyData {
   [key: string]: any;
 }
 
+// Исправления названий валют для корректного отображения
+const CURRENCY_NAME_FIXES: Record<string, string> = {
+  'UAH': 'Украинская гривна',    // вместо "гривен"
+  'HUF': 'Венгерский форинт',    // вместо "форинтов"
+  'MXN': 'Мексиканское песо',    // использовать то же самое название
+  'ILS': 'Израильский шекель'    // использовать то же самое название
+};
+
 // Получение данных о нескольких валютах
 export const fetchCurrencyData = async (currencyCodes: string[] = []): Promise<CurrencyData> => {
   try {
@@ -29,7 +37,8 @@ export const fetchCurrencyData = async (currencyCodes: string[] = []): Promise<C
       
       currencies.push({
         code,
-        name: currencyData.Name,
+        // Используем исправленное название из нашего словаря, если оно там есть
+        name: CURRENCY_NAME_FIXES[code] || currencyData.Name,
         value: currencyData.Value,
         previous: currencyData.Previous,
         change: currencyData.Value - currencyData.Previous,
@@ -59,7 +68,8 @@ export const fetchSingleCurrency = async (currencyCode: string): Promise<Currenc
     
     return {
       code: currencyCode,
-      name: currencyData.Name,
+      // Используем исправленное название из нашего словаря, если оно там есть
+      name: CURRENCY_NAME_FIXES[currencyCode] || currencyData.Name,
       value: currencyData.Value,
       previous: currencyData.Previous,
       change: currencyData.Value - currencyData.Previous,

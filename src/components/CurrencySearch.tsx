@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, memo, useCallback } from 'react';
 import { Currency } from '../types';
 import '../styles/CurrencySearch.scss';
 import { FiSearch, FiPlus } from 'react-icons/fi';
@@ -28,9 +28,6 @@ const ALL_CURRENCIES = [
   { code: 'AED', name: 'Дирхам ОАЭ', country: 'ae' },
   { code: 'BRL', name: 'Бразильский реал', country: 'br' },
   { code: 'ZAR', name: 'Южноафриканский рэнд', country: 'za' },
-  { code: 'RUB', name: 'Российский рубль', country: 'ru' },
-  { code: 'MXN', name: 'Мексиканское песо', country: 'mx' },
-  { code: 'ILS', name: 'Израильский шекель', country: 'il' },
   { code: 'KRW', name: 'Южнокорейская вона', country: 'kr' },
   { code: 'CZK', name: 'Чешская крона', country: 'cz' },
   { code: 'HUF', name: 'Венгерский форинт', country: 'hu' },
@@ -39,7 +36,9 @@ const ALL_CURRENCIES = [
 ];
 
 interface CurrencySearchProps {
-  activeCurrencies: Currency[];
+  activeCurrencies: Currency[];  // Используется для отладки, можно удалить
+  selectedCurrencies: string[];
+  selectedButNotLoaded?: string[];
   onAddCurrency: (code: string) => void;
 }
 
@@ -49,56 +48,149 @@ interface CurrencyItemWithFlag {
   country: string;
 }
 
-const CurrencySearch: React.FC<CurrencySearchProps> = ({ activeCurrencies, onAddCurrency }) => {
+// Мемоизированный компонент для флага, который не будет перерисовываться
+const MemoizedFlag = memo(({ country, name }: { country: string; name: string }) => {
+  // Используем useMemo для создания единственного инстанса компонента флага для каждой страны
+  return useMemo(() => {
+    return (
+      <OptimizedImage
+        src={`https://flagcdn.com/w40/${country}.png`} 
+        alt={`Флаг ${name}`}
+        width={24}
+        height={18}
+        countryCode={country}
+        loading="lazy"
+      />
+    );
+  }, [country]); // Зависимость только от кода страны
+}, (prevProps, nextProps) => {
+  // Перерисовывать только если изменился код страны
+  return prevProps.country === nextProps.country;
+});
+
+// Мемоизированный компонент элемента результатов поиска
+const MemoizedSearchItem = memo(({ 
+  currency, 
+  onSelect,
+  isLoading
+}: { 
+  currency: CurrencyItemWithFlag; 
+  onSelect: (code: string) => void;
+  isLoading?: boolean;
+}) => {
+  // Мемоизируем обработчик клика
+  const handleClick = useCallback(() => {
+    if (!isLoading) {
+      onSelect(currency.code);
+    }
+  }, [currency.code, onSelect, isLoading]);
+
+  // Используем useMemo для рендеринга содержимого элемента
+  const itemContent = useMemo(() => (
+    <>
+      <div className="currency-search__item-info">
+        <div className="currency-search__item-flag">
+          <MemoizedFlag 
+            country={currency.country} 
+            name={currency.name} 
+          />
+        </div>
+        <div className="currency-search__item-text">
+          <span className="currency-search__item-code">{currency.code}</span>
+          <span className="currency-search__item-name">{currency.name}</span>
+        </div>
+      </div>
+      {isLoading ? (
+        <span className="currency-search__item-loading">Добавление...</span>
+      ) : (
+        <FiPlus className="currency-search__item-add" />
+      )}
+    </>
+  ), [currency, isLoading]);
+
+  return (
+    <div 
+      className={`currency-search__item ${isLoading ? 'currency-search__item--loading' : ''}`}
+      onClick={handleClick}
+    >
+      {itemContent}
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  // Перерисовывать только если изменился код валюты или состояние загрузки
+  return prevProps.currency.code === nextProps.currency.code && 
+         prevProps.isLoading === nextProps.isLoading;
+});
+
+const CurrencySearch: React.FC<CurrencySearchProps> = memo(({ 
+  selectedCurrencies,
+  selectedButNotLoaded = [],
+  onAddCurrency 
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<CurrencyItemWithFlag[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const cachedResultsRef = useRef<{[key: string]: CurrencyItemWithFlag[]}>({});
   
-  // Кэшируем активные коды валют для минимизации пересчетов
-  const activeCodes = useMemo(() => 
-    activeCurrencies.map(c => c.code),
-    [activeCurrencies]
+  // Дебаунс для поискового запроса
+  useEffect(() => {
+    const timerId = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+
+    return () => {
+      clearTimeout(timerId);
+    };
+  }, [searchTerm]);
+  
+  // Создаем объединенный список валют, которые уже добавлены или в процессе добавления
+  const allSelectedCodes = useMemo(() => {
+    const uniqueCodes = new Set([...selectedCurrencies, ...selectedButNotLoaded]);
+    return Array.from(uniqueCodes);
+  }, [selectedCurrencies, selectedButNotLoaded]);
+  
+  // Получаем доступные валюты (не активные)
+  const availableCurrencies = useMemo(() => 
+    ALL_CURRENCIES.filter(currency => !allSelectedCodes.includes(currency.code)),
+    [allSelectedCodes]
   );
   
-  // Получаем доступные валюты (не активные) - этот список меняется только при изменении activeCurrencies
-  const availableCurrencies = useMemo(() => 
-    ALL_CURRENCIES.filter(currency => !activeCodes.includes(currency.code)),
-    [activeCodes]
+  // Определяем, остались ли еще валюты для добавления
+  const hasAvailableCurrenciesToAdd = useMemo(() => 
+    availableCurrencies.length > 0,
+    [availableCurrencies]
   );
 
   // Фильтрация валют по поисковому запросу или вывод всех доступных валют
   useEffect(() => {
-    if (searchTerm.trim() === '') {
-      // Показываем все доступные валюты из кэша или вычисляем их
+    if (debouncedSearchTerm.trim() === '') {
+      // Показываем все доступные валюты
       setSearchResults(availableCurrencies);
     } else {
       // Проверяем, есть ли результаты в кэше для данного поискового запроса
-      const cacheKey = `${searchTerm}-${activeCodes.join(',')}`;
+      const cacheKey = `${debouncedSearchTerm}-${allSelectedCodes.join(',')}`;
       
       if (cachedResultsRef.current[cacheKey]) {
         setSearchResults(cachedResultsRef.current[cacheKey]);
       } else {
         // Если нет, фильтруем и сохраняем в кэш
-        const filteredResults = ALL_CURRENCIES.filter(currency => {
-          const matchesSearch = 
-            currency.code.toLowerCase().includes(searchTerm.toLowerCase()) || 
-            currency.name.toLowerCase().includes(searchTerm.toLowerCase());
-          
-          return matchesSearch && !activeCodes.includes(currency.code);
+        const filteredResults = availableCurrencies.filter(currency => {
+          return currency.code.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || 
+                 currency.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
         });
 
         cachedResultsRef.current[cacheKey] = filteredResults;
         setSearchResults(filteredResults);
       }
     }
-  }, [searchTerm, activeCodes, availableCurrencies]);
+  }, [debouncedSearchTerm, allSelectedCodes, availableCurrencies]);
 
-  // Очищаем кэш при изменении активных валют
+  // Очищаем кэш при изменении доступных валют
   useEffect(() => {
     cachedResultsRef.current = {};
-  }, [activeCurrencies]);
+  }, [availableCurrencies]);
 
   // Обработчик для закрытия выпадающего списка при клике снаружи
   useEffect(() => {
@@ -112,14 +204,87 @@ const CurrencySearch: React.FC<CurrencySearchProps> = ({ activeCurrencies, onAdd
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [wrapperRef]);
+  }, []);
 
-  // Обработчик для добавления валюты
-  const handleAddCurrency = (code: string) => {
+  // Обработчик для закрытия выпадающего списка при клике на кнопку Esc
+  useEffect(() => {
+    const handleEscKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscKey);
+    return () => {
+      document.removeEventListener('keydown', handleEscKey);
+    };
+  }, []);
+
+  // Мемоизированный обработчик для добавления валюты
+  const handleAddCurrency = useCallback((code: string) => {
+    // Проверяем, не выбрана ли уже валюта
+    if (allSelectedCodes.includes(code)) {
+      return;
+    }
+    
+    // Немедленно обновляем результаты поиска, чтобы скрыть добавленную валюту
+    setSearchResults(prev => prev.filter(currency => currency.code !== code));
+    
+    // Вызываем функцию добавления валюты
     onAddCurrency(code);
-    setSearchTerm('');
+    
+    // Закрываем выпадающий список после добавления валюты
     setShowDropdown(false);
-  };
+    
+    // Очищаем поле поиска
+    setSearchTerm('');
+  }, [onAddCurrency, allSelectedCodes]);
+
+  // Мемоизированный обработчик изменения поля ввода
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    setShowDropdown(true);
+  }, []);
+
+  // Мемоизированный список результатов поиска
+  const searchResultsList = useMemo(() => {
+    if (!showDropdown) return null;
+    
+    // Проверяем, если нет доступных валют для добавления
+    if (!hasAvailableCurrenciesToAdd) {
+      return (
+        <div className="currency-search__dropdown">
+          <div className="currency-search__no-results">
+            Вы добавили все доступные валюты
+          </div>
+        </div>
+      );
+    }
+    
+    // Показываем сообщение, если нет результатов поиска
+    if (searchResults.length === 0) {
+      return (
+        <div className="currency-search__dropdown">
+          <div className="currency-search__no-results">
+            Ничего не найдено
+          </div>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="currency-search__dropdown">
+        {searchResults.map((currency) => (
+          <MemoizedSearchItem 
+            key={currency.code} 
+            currency={currency} 
+            onSelect={handleAddCurrency}
+            isLoading={selectedButNotLoaded.includes(currency.code)}
+          />
+        ))}
+      </div>
+    );
+  }, [searchResults, showDropdown, handleAddCurrency, hasAvailableCurrenciesToAdd, selectedButNotLoaded]);
 
   return (
     <div className="currency-search" ref={wrapperRef}>
@@ -130,46 +295,14 @@ const CurrencySearch: React.FC<CurrencySearchProps> = ({ activeCurrencies, onAdd
           className="currency-search__input"
           placeholder="Поиск валюты по названию или коду..."
           value={searchTerm}
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            setShowDropdown(true);
-          }}
+          onChange={handleInputChange}
           onFocus={() => setShowDropdown(true)}
-          onClick={() => setShowDropdown(true)}
         />
       </div>
       
-      {showDropdown && searchResults.length > 0 && (
-        <div className="currency-search__dropdown">
-          {searchResults.map((currency) => (
-            <div 
-              key={currency.code} 
-              className="currency-search__item"
-              onClick={() => handleAddCurrency(currency.code)}
-            >
-              <div className="currency-search__item-info">
-                <div className="currency-search__item-flag">
-                  <OptimizedImage
-                    src={`https://flagcdn.com/24x18/${currency.country}.png`} 
-                    alt={`Флаг ${currency.name}`}
-                    width={24}
-                    height={18}
-                    countryCode={currency.country}
-                    loading="lazy"
-                  />
-                </div>
-                <div className="currency-search__item-text">
-                  <span className="currency-search__item-code">{currency.code}</span>
-                  <span className="currency-search__item-name">{currency.name}</span>
-                </div>
-              </div>
-              <FiPlus className="currency-search__item-add" />
-            </div>
-          ))}
-        </div>
-      )}
+      {searchResultsList}
     </div>
   );
-};
+});
 
 export default CurrencySearch; 

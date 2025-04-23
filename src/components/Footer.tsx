@@ -6,9 +6,6 @@ const Footer: React.FC = () => {
   
   return (
     <footer className="footer">
-      <p className="footer__text">
-        Данные предоставлены Центральным Банком Российской Федерации
-      </p>
       <p className="footer__copyright">
         © {currentYear} Курсы валют
       </p>

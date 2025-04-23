@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, createContext } from 'react';
+import { useState, useEffect, useCallback, createContext, useMemo } from 'react';
 import { CurrencyData } from './types';
 import { fetchCurrencyData, fetchSingleCurrency } from './services/currencyService';
 import Header from './components/Header';
@@ -39,6 +39,8 @@ function App() {
     const saved = localStorage.getItem(SELECTED_CURRENCIES_KEY);
     return saved ? JSON.parse(saved) : DEFAULT_CURRENCIES;
   });
+  // Состояние для отслеживания валют в процессе добавления
+  const [loadingCurrencies, setLoadingCurrencies] = useState<string[]>([]);
   // Состояние для хранения недавно найденных валют
   const [recentlySearched, setRecentlySearched] = useState<string[]>([]);
   // Состояние для отслеживания времени последнего обновления (выделено в отдельное состояние)
@@ -56,10 +58,9 @@ function App() {
       setError(null);
       
       // Получаем данные для всех выбранных валют
-      const data = await fetchCurrencyData(selectedCurrencies);
+      let data = await fetchCurrencyData(selectedCurrencies);
       
-      // Гарантируем, что валюты отображаются в том же порядке, что и в selectedCurrencies
-      // Это обеспечит, что последние добавленные валюты будут в начале списка
+      // Сортируем валюты в том же порядке, что и в selectedCurrencies
       const sortedCurrencies = [...data.currencies];
       
       sortedCurrencies.sort((a, b) => {
@@ -73,13 +74,17 @@ function App() {
       // Обновляем время последнего обновления и данные
       setLastUpdateTime(Date.now());
       setCurrencyData(data);
+      
+      // Очищаем список загружаемых валют, так как все загрузились
+      setLoadingCurrencies([]);
+      
     } catch (err) {
       setError('Не удалось загрузить данные о курсах валют');
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, [selectedCurrencies, recentlySearched]);
+  }, [selectedCurrencies]);
 
   // Загружаем данные при первом рендере и при изменении выбранных валют
   useEffect(() => {
@@ -95,60 +100,77 @@ function App() {
     return () => clearInterval(intervalId);
   }, [loadCurrencyData]);
 
-  // Функция для добавления новой валюты (через контекст)
-  const handleAddCurrency = async (currencyCode: string) => {
-    try {
-      // Если валюта уже выбрана, просто поднимаем ее в поиске
+  // Функция для добавления новой валюты
+  const handleAddCurrency = useCallback((currencyCode: string) => {
+    // Если валюта уже выбрана или в процессе добавления, игнорируем
+    if (selectedCurrencies.includes(currencyCode) || loadingCurrencies.includes(currencyCode)) {
+      // Если валюта уже в списке, просто обновляем список недавно найденных
       if (selectedCurrencies.includes(currencyCode)) {
         setRecentlySearched(prev => {
           const updated = prev.filter(code => code !== currencyCode);
-          return [currencyCode, ...updated].slice(0, 5); // Сохраняем только 5 последних
+          return [currencyCode, ...updated].slice(0, 5);
         });
-        return;
       }
-      
-      setLoading(true);
-      
-      // Получаем данные о новой валюте
-      const newCurrency = await fetchSingleCurrency(currencyCode);
-      
-      if (newCurrency) {
-        // Добавляем код валюты в начало списка выбранных
-        setSelectedCurrencies(prev => [currencyCode, ...prev]);
-        
-        // Добавляем валюту в список недавно найденных
-        setRecentlySearched(prev => {
-          const updated = prev.filter(code => code !== currencyCode);
-          return [currencyCode, ...updated].slice(0, 5); // Сохраняем только 5 последних
-        });
-        
-        // Добавляем новую валюту к текущим данным в начало списка
-        if (currencyData) {
-          setCurrencyData(prev => {
-            if (!prev) return null;
+      return;
+    }
+    
+    console.log(`Добавление валюты ${currencyCode}`);
+    
+    // Добавляем валюту в список загружаемых
+    setLoadingCurrencies(prev => [...prev, currencyCode]);
+    
+    // Устанавливаем состояние загрузки сразу, чтобы UI отреагировал
+    setLoading(true);
+    
+    // Добавляем новую валюту в список выбранных
+    setSelectedCurrencies(prev => [currencyCode, ...prev]);
+    
+    // Добавляем валюту в список недавно найденных
+    setRecentlySearched(prev => {
+      const updated = prev.filter(code => code !== currencyCode);
+      return [currencyCode, ...updated].slice(0, 5);
+    });
+    
+    // Получаем данные о новой валюте и обновляем список
+    fetchSingleCurrency(currencyCode)
+      .then(newCurrency => {
+        if (newCurrency && currencyData) {
+          console.log(`Получены данные для ${currencyCode}:`, newCurrency);
+          
+          // Добавляем новую валюту в текущие данные
+          const updatedCurrencies = [newCurrency, ...currencyData.currencies];
+          
+          // Обновляем данные сразу
+          setCurrencyData(prevData => {
+            if (!prevData) return null;
+            
             return {
-              ...prev,
-              currencies: [newCurrency, ...prev.currencies]
+              ...prevData,
+              currencies: updatedCurrencies
             };
           });
+          
+          // Обновляем время обновления
+          setLastUpdateTime(Date.now());
         }
-      }
-    } catch (err) {
-      setError(`Не удалось добавить валюту ${currencyCode}`);
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      })
+      .catch(err => {
+        console.error(`Ошибка при получении данных для валюты ${currencyCode}:`, err);
+      })
+      .finally(() => {
+        // Убираем валюту из списка загружаемых
+        setLoadingCurrencies(prev => prev.filter(code => code !== currencyCode));
+        
+        // Устанавливаем флаг окончания загрузки
+        setLoading(false);
+      });
+    
+  }, [selectedCurrencies, currencyData, loadingCurrencies]);
 
-  // Функция для удаления валюты (через контекст)
-  const handleDeleteCurrency = (currencyCode: string) => {
-    // Удаляем валюту из списка выбранных (для следующего обновления)
-    setSelectedCurrencies(prev => {
-      const newSelected = prev.filter(code => code !== currencyCode);
-      localStorage.setItem(SELECTED_CURRENCIES_KEY, JSON.stringify(newSelected));
-      return newSelected;
-    });
+  // Функция для удаления валюты
+  const handleDeleteCurrency = useCallback((currencyCode: string) => {
+    // Удаляем валюту из списка выбранных
+    setSelectedCurrencies(prev => prev.filter(code => code !== currencyCode));
     
     // Удаляем валюту из списка недавно найденных, если она там есть
     if (recentlySearched.includes(currencyCode)) {
@@ -157,12 +179,10 @@ function App() {
     
     // Удаляем валюту из текущих данных
     if (currencyData) {
-      // Создаем локальную копию для изменения
       const updatedCurrencies = currencyData.currencies.filter(
         currency => currency.code !== currencyCode
       );
       
-      // Обновляем состояние через функцию, чтобы не вызывать лишних перерисовок
       setCurrencyData(prev => {
         if (!prev) return null;
         return {
@@ -171,13 +191,13 @@ function App() {
         };
       });
     }
-  };
+  }, [currencyData, recentlySearched]);
 
   // Создаем объект контекста для действий с валютами
-  const currencyActions: CurrencyActionsContextType = {
+  const currencyActions = useMemo(() => ({
     deleteCurrency: handleDeleteCurrency,
     addCurrency: handleAddCurrency
-  };
+  }), [handleDeleteCurrency, handleAddCurrency]);
 
   // Компонент таймера обернут в функцию для предотвращения ререндеринга
   const renderTimer = () => (
@@ -188,20 +208,33 @@ function App() {
     />
   );
 
+  // Информация о валютах для передачи в CurrencySearch
+  const currencyInfo = useMemo(() => {
+    return {
+      active: currencyData?.currencies || [],
+      selected: selectedCurrencies,
+      loading: loadingCurrencies
+    };
+  }, [currencyData, selectedCurrencies, loadingCurrencies]);
+
   // Компонент списка валют обернут в провайдер контекста
-  const renderCurrencyList = () => (
-    <CurrencyActionsContext.Provider value={currencyActions}>
-      <CurrencySearch 
-        activeCurrencies={currencyData?.currencies || []}
-        onAddCurrency={handleAddCurrency}
-      />
-      
-      <CurrencyList 
-        currencies={currencyData?.currencies || []} 
-        loading={loading}
-      />
-    </CurrencyActionsContext.Provider>
-  );
+  const renderCurrencyList = () => {
+    return (
+      <CurrencyActionsContext.Provider value={currencyActions}>
+        <CurrencySearch 
+          activeCurrencies={currencyInfo.active}
+          selectedCurrencies={selectedCurrencies}
+          selectedButNotLoaded={loadingCurrencies}
+          onAddCurrency={handleAddCurrency}
+        />
+        
+        <CurrencyList 
+          currencies={currencyData?.currencies || []} 
+          loading={loading}
+        />
+      </CurrencyActionsContext.Provider>
+    );
+  };
 
   return (
     <div className="app">
@@ -229,7 +262,7 @@ function App() {
         
         <Footer />
       </div>
-      </div>
+    </div>
   );
 }
 

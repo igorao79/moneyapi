@@ -67,6 +67,9 @@ const COUNTRY_CODES: Record<string, string> = {
   AED: 'ae',   // ОАЭ
   BYN: 'by',   // Беларусь
   KZT: 'kz',   // Казахстан
+  RON: 'ro',   // Румыния
+  HUF: 'hu',   // Венгрия
+  BGN: 'bg',   // Болгария
 }; 
 
 // Объект с символами различных валют для более точного отображения
@@ -103,6 +106,9 @@ const CURRENCY_SYMBOLS: Record<string, ReactElement> = {
   ISK: <FaCoins />,             // Исландская крона
 };
 
+// Валюты, для которых нужно использовать специальный формат флага
+const PROBLEMATIC_FLAGS = ['ro', 'hu', 'bg', 'il', 'mx'];
+
 // Enhanced global flag preloader that guarantees no re-renders
 const preloadedFlags: Record<string, HTMLDivElement> = {};
 
@@ -118,17 +124,28 @@ const createFlagElement = (code: string) => {
   // Create actual DOM element for the flag
   const flagDiv = document.createElement('div');
   flagDiv.className = "currency-item__background";
-  flagDiv.style.backgroundImage = `url(https://flagcdn.com/w80/${countryCode}.${supportsWebP ? 'webp' : 'png'})`;
+  
+  // Для проблемных флагов используем PNG с большим размером и дополнительные стили
+  const useSpecialFormat = PROBLEMATIC_FLAGS.includes(countryCode);
+  const format = supportsWebP ? 'webp' : 'png';
+  const size = useSpecialFormat ? 'w160' : 'w80'; // Увеличиваем размер для проблемных флагов
+  
+  flagDiv.style.backgroundImage = `url(https://flagcdn.com/${size}/${countryCode}.${format})`;
   flagDiv.style.backgroundSize = 'cover';
   flagDiv.style.backgroundPosition = 'center';
   flagDiv.style.backgroundRepeat = 'no-repeat';
-  flagDiv.style.opacity = '0.5';
+  flagDiv.style.opacity = useSpecialFormat ? '0.7' : '0.5'; // Увеличиваем непрозрачность для проблемных флагов
   flagDiv.style.position = 'absolute';
   flagDiv.style.top = '0';
   flagDiv.style.left = '0';
   flagDiv.style.width = '100%';
   flagDiv.style.height = '100%';
   flagDiv.style.zIndex = '0';
+  
+  // Для проблемных флагов добавляем светлый фон
+  if (useSpecialFormat) {
+    flagDiv.style.backgroundColor = '#f0f0f0';
+  }
   
   // Store in cache
   preloadedFlags[code] = flagDiv;

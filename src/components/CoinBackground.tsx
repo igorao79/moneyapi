@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import '../styles/CoinBackground.scss';
 
-// Количество монеток на фоне
-const COIN_COUNT = 25;
+// Интервал между появлением монет (в мс)
+const COIN_INTERVAL = 400;
 
 // Компонент анимированного фона с падающими монетками
 const CoinBackground: React.FC = () => {
@@ -12,6 +12,8 @@ const CoinBackground: React.FC = () => {
     if (!containerRef.current) return;
     
     const container = containerRef.current;
+    const coinElements: HTMLDivElement[] = [];
+    let coinIntervalId: number | null = null;
     
     // Функция для создания одной монетки
     const createCoin = () => {
@@ -19,7 +21,7 @@ const CoinBackground: React.FC = () => {
       coin.className = 'coin';
       
       // Варьируем размер монетки
-      const size = Math.random() * 30 + 10; // от 10px до 40px
+      const size = Math.random() * 25 + 10; // от 10px до 35px
       coin.style.width = `${size}px`;
       coin.style.height = `${size}px`;
       
@@ -27,46 +29,74 @@ const CoinBackground: React.FC = () => {
       const startPositionX = Math.random() * 100;
       coin.style.left = `${startPositionX}%`;
       
-      // Случайная задержка анимации
-      const delay = Math.random() * 5;
-      coin.style.animationDelay = `${delay}s`;
-      
-      // Случайная продолжительность анимации
-      const duration = Math.random() * 5 + 5; // от 5 до 10 секунд
-      coin.style.animationDuration = `${duration}s`;
-      
       // Создаем внутреннюю структуру монетки (лицевая сторона)
       const coinFront = document.createElement('div');
       coinFront.className = 'coin-front';
       coin.appendChild(coinFront);
       
+      // Установка времени анимации
+      const baseAnimationDuration = 9; // базовое время в секундах
+      const variation = Math.random() * 2 - 1; // от -1 до +1 секунды
+      const animationDuration = baseAnimationDuration + variation;
+      coin.style.setProperty('--fall-duration', `${animationDuration}s`);
+      
+      // Установка небольшой случайной задержки
+      const animationDelay = Math.random() * 1;
+      coin.style.setProperty('--fall-delay', `${animationDelay}s`);
+      
       // Добавляем монетку в контейнер
       container.appendChild(coin);
+      coinElements.push(coin);
       
-      // Удаляем монетку после завершения анимации и создаем новую
+      // Запускаем анимацию в следующем кадре
+      requestAnimationFrame(() => {
+        coin.classList.add('active-coin');
+      });
+      
+      // Удаляем монетку после завершения анимации
       setTimeout(() => {
-        container.removeChild(coin);
-        createCoin();
-      }, duration * 1000);
+        if (container.contains(coin)) {
+          container.removeChild(coin);
+          const index = coinElements.indexOf(coin);
+          if (index > -1) {
+            coinElements.splice(index, 1);
+          }
+        }
+      }, (animationDuration + animationDelay + 0.5) * 1000);
     };
     
-    // Создаем начальный набор монеток
-    for (let i = 0; i < COIN_COUNT; i++) {
-      setTimeout(() => createCoin(), Math.random() * 2000);
-    }
+    // Создаем монетки через равные интервалы времени
+    const startCoinGeneration = () => {
+      // Создаем сразу несколько монеток с разными задержками
+      for (let i = 0; i < 10; i++) {
+        setTimeout(createCoin, i * 200);
+      }
+      
+      // Запускаем регулярное создание монет через равные интервалы
+      coinIntervalId = window.setInterval(createCoin, COIN_INTERVAL);
+    };
+    
+    // Запускаем генерацию монет
+    startCoinGeneration();
     
     // Очистка при размонтировании компонента
     return () => {
-      while (container.firstChild) {
-        container.removeChild(container.firstChild);
+      // Останавливаем интервал
+      if (coinIntervalId !== null) {
+        clearInterval(coinIntervalId);
       }
+      
+      // Очищаем падающие монетки
+      coinElements.forEach(coin => {
+        if (container.contains(coin)) {
+          container.removeChild(coin);
+        }
+      });
     };
   }, []);
   
   return (
-    <div className="coin-background" ref={containerRef}>
-      <div className="coin-pile"></div>
-    </div>
+    <div className="coin-background" ref={containerRef}></div>
   );
 };
 
